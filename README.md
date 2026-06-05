@@ -10,11 +10,13 @@ Forensic analysis tool to detect the **Novoware** cheat client on Minecraft thro
 
 ## Usage
 
-Download and run the `.exe` file. The program offers two main functionalities accessible through the menu:
+Download and run the `.exe` file. The program offers three options accessible through the main menu:
 
 **[1] Scan Memory Processes** — RAM memory forensic analysis
 
 **[2] Journal Trace** — NTFS journal forensic analysis (powered by spokwn's JournalTrace)
+
+**[3] Exit**
 
 ---
 
@@ -30,14 +32,15 @@ This function performs a forensic RAM memory analysis to detect whether Novoware
 - Identifies all `java.exe` and `javaw.exe` processes active on the system
 - Collects metadata: PID, process name, uptime
 - Requests handle with `PROCESS_VM_READ` and `PROCESS_QUERY_INFORMATION` permissions
+- If no Java process is found, the user is prompted to start Minecraft first
 
 #### Phase 2: Memory Mapping
 
 **Memory region mapping**
 - Enumerates all process memory regions via `VirtualQueryEx`
 - Filters only committed regions (`MEM_COMMIT`)
-- Selects regions with readable protection attributes (READ, READWRITE, EXECUTE_READ, EXECUTE_READWRITE)
-- Excludes protected regions with `PAGE_GUARD` flag
+- Selects regions with readable protection attributes: `PAGE_READONLY`, `PAGE_READWRITE`, `PAGE_EXECUTE_READ`, `PAGE_EXECUTE_READWRITE`
+- Excludes guarded regions with `PAGE_GUARD` flag
 - Ignores regions larger than 100MB to optimize performance
 
 #### Phase 3: Pattern Matching
@@ -46,13 +49,14 @@ This function performs a forensic RAM memory analysis to detect whether Novoware
 - Reads memory in 50MB chunks via `ReadProcessMemory`
 - Performs byte-by-byte pattern matching using **private cheat signatures**
 - Signatures are exclusive to Novoware and kept private to prevent bypass — they are designed to detect even **self-destructed** instances of the client
-- Real-time progress bar shows percentage of analyzed memory
 
 #### Phase 4: Classification
 
 **Results:**
-- **CLEAN**: No signature detected → legitimate process
-- **FUCKED**: One or more signatures found → Novoware client detected in memory
+- **CLEAN** — No signature detected → legitimate process
+- **FUCKED** — One or more signatures found → Novoware client detected in memory
+
+A final summary shows total processes scanned, clean count, and detected count.
 
 ---
 
@@ -69,6 +73,11 @@ JournalTrace is an external forensic tool that parses the NTFS change journal (`
 **Automatic component download**
 - Downloads `JournalTrace.exe` (latest release) from spokwn's official GitHub repository
 - Saves to temporary directory: `%TEMP%\JournalTraceTool\`
+- **If `JournalTrace.exe` already exists in the temp folder, the download is skipped** — no redundant re-downloads
+
+**Overlay hint**
+- After launching JournalTrace, the tool renders an animated **fade overlay message** directly on the JournalTrace window: `now filter with .jar to find the replace`
+- The overlay uses GDI (`DrawText`, `SetTextColor`) with a pulsing brightness animation for ~7 seconds, then fades out automatically
 
 **NTFS Journal Analysis**
 
@@ -77,8 +86,9 @@ JournalTrace parses the raw NTFS journal and returns a full list of file activit
 > 💡 **Tip**: Filter results by `.jar` and check the dates — this is how you spot if Novoware was replaced or self-destructed.
 
 **Execution**
-- Launches JournalTrace with elevated privileges (UAC prompt)
+- Launches JournalTrace with elevated privileges (UAC prompt via `runas`)
 - Opens a separate window for detailed output
+- The main tool waits for JournalTrace to finish before returning to the menu
 
 ---
 
@@ -99,8 +109,8 @@ The tool requires elevated permissions for:
 ### Behavior without Admin
 
 If run without administrative privileges:
-- Yellow warning is shown with option to continue
-- **Running as administrator is strongly recommended**
+- A warning is shown with the option to continue anyway (`Y/N`)
+- **Running as administrator is strongly recommended** — without it, memory reads for certain processes may silently fail
 
 ---
 
@@ -108,22 +118,17 @@ If run without administrative privileges:
 
 ### Why is memory scanning reliable?
 
-**Private signatures**: Detection strings are exclusive to Novoware and kept private
+**Private signatures** — detection patterns are exclusive to Novoware and kept private to prevent bypass
 
-**Self-destruct detection**: Signatures are designed to catch Novoware even when it attempts to clean itself from memory
+**Self-destruct detection** — signatures are designed to catch Novoware even when it attempts to clean itself from memory
 
-**Runtime detection**: Detects the cheat only if currently loaded in memory — no false positives from residual files
+**Runtime detection** — detects the cheat only if currently loaded in memory, no false positives from residual files
 
 ### Why is Journal Trace analysis important?
 
-**NTFS persistence**: The Windows journal records file activity at the filesystem level — even files that have been deleted leave traces
+**NTFS persistence** — the Windows journal records file activity at the filesystem level, even files that have been deleted leave traces
 
-**Self-destruct bypass**: Even if Novoware removes itself from disk, the NTFS journal retains evidence of its presence
-
-### Limitations
-
-- **Memory protection**: Some cheats implement anti-dumping that prevents memory reading
-- **Journal rollover**: On very active systems, old NTFS journal entries may be overwritten over time
+**Self-destruct bypass** — even if Novoware removes itself from disk, the NTFS journal retains evidence of its presence
 
 ---
 
@@ -132,7 +137,7 @@ If run without administrative privileges:
 - **The tool does NOT send data online** — all memory analysis is local
 - **The tool does NOT modify memory** — read-only mode only
 - **The tool does NOT collect personal information**
-- Downloaded files come from official and verifiable GitHub repositories (spokwn/JournalTrace)
+- The only external download is JournalTrace, fetched directly from the official [spokwn/JournalTrace](https://github.com/spokwn/JournalTrace) GitHub repository
 
 ---
 
